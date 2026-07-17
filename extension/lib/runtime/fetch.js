@@ -61,6 +61,10 @@ function createResponse(status, bytes) {
 
 export function createFetch() {
     const session = new Soup.Session();
+    // Without a timeout a hung request never resolves, and the scheduler
+    // chains polls on a per-provider queue — one hang kills the provider
+    // until the shell restarts.
+    session.timeout = 30;
 
     function sendMessage(message) {
         return new Promise((resolve, reject) => {
@@ -95,7 +99,10 @@ export function createFetch() {
         }
 
         const bytes = await sendMessage(message);
-        return createResponse(message.get_status(), bytes);
+        // Read the GObject property instead of get_status(): GJS validates the
+        // return value of get_status() against the Soup.Status enum, which has
+        // no entry for some valid HTTP codes (e.g. 429) and throws.
+        return createResponse(message.status_code, bytes);
     }
 
     function dispose() {

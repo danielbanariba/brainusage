@@ -55,7 +55,9 @@ export function applyProviderResult(state, result, requestId, updatedAtIso) {
         return true;
     }
 
-    state.data = result?.data ?? null;
+    // Keep the last known usage on failure so the UI can render stale data
+    // alongside the warning instead of going blank (e.g. while rate limited).
+    state.data = result?.data ?? state.data;
     state.error = {
         code: state.code,
         providerCode: result?.error?.code ?? null,

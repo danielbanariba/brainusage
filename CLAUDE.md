@@ -39,7 +39,7 @@ After changing GNOME source, re-install and re-login (Wayland) or `Alt+F2 → r`
 The platform-agnostic core lives in `shared/` (single source of truth, pure ESM + DI). Each platform adds a thin adapter layer and consumes the core at build time.
 
 ```
-shared/core/scheduler.js → Polls providers on 180s interval, serial queue per provider
+shared/core/scheduler.js → Polls providers on 600s interval, serial queue per provider
 shared/core/aggregate.js → Computes minRemainingPct across all providers
 shared/core/state.js     → Per-provider state machine (OK/PARTIAL_DATA/AUTH_EXPIRED/RATE_LIMITED/NETWORK_ERROR/SCHEMA_CHANGED)
 shared/core/backoff.js   → Exponential backoff (30s initial, 15m cap, on 2+ consecutive network errors or 429)
@@ -89,7 +89,7 @@ kde/plasma{5,6}/contents/code/ → bundled brainusage-app.mjs + runtime.js (buil
 
 ## Testing
 
-Tests use `bun:test` (describe/test/expect + vi for fake timers). Tests mock fetch and readTextFile via DI — no network or filesystem calls. Scheduler tests use `vi.useFakeTimers()` and `vi.advanceTimersByTime()` to control polling. Provider tests use deferred promises to simulate async resolution order.
+Tests use `bun:test` (describe/test/expect). Tests mock fetch and readTextFile via DI — no network or filesystem calls. Scheduler tests inject `setIntervalFn` to capture the poll callback and drive ticks manually (bun 1.3 removed `vi.advanceTimersByTime`). Provider tests use deferred promises to simulate async resolution order.
 
 ## Credentials
 

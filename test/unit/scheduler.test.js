@@ -1,4 +1,4 @@
-import {afterEach, describe, expect, setSystemTime, test, vi} from 'bun:test';
+import {describe, expect, test} from 'bun:test';
 
 import {createBackoffManager} from '../../shared/core/backoff.js';
 import {createScheduler, DEFAULT_POLL_INTERVAL_MS} from '../../shared/core/scheduler.js';
@@ -20,19 +20,24 @@ function deferred() {
     return {promise, resolve, reject};
 }
 
-afterEach(() => {
-    vi.useRealTimers();
-});
-
 describe('scheduler', () => {
-    test('polls all providers every 180000ms', async () => {
-        vi.useFakeTimers();
-        setSystemTime(new Date('2026-02-08T00:00:00.000Z'));
+    test('defaults to a 10 minute poll interval', () => {
+        expect(DEFAULT_POLL_INTERVAL_MS).toBe(600_000);
+    });
 
+    test('polls all providers once per poll interval', async () => {
         let claudeCalls = 0;
         let codexCalls = 0;
+        let intervalMs = null;
+        let tick = null;
 
         const scheduler = createScheduler({
+            setIntervalFn: (callback, ms) => {
+                tick = callback;
+                intervalMs = ms;
+                return 1;
+            },
+            clearIntervalFn: () => {},
             providers: {
                 claude: {
                     async getUsage() {
@@ -52,16 +57,11 @@ describe('scheduler', () => {
         scheduler.start();
         await flushMicrotasks();
 
+        expect(intervalMs).toBe(DEFAULT_POLL_INTERVAL_MS);
         expect(claudeCalls).toBe(1);
         expect(codexCalls).toBe(1);
 
-        vi.advanceTimersByTime(DEFAULT_POLL_INTERVAL_MS - 1);
-        await flushMicrotasks();
-
-        expect(claudeCalls).toBe(1);
-        expect(codexCalls).toBe(1);
-
-        vi.advanceTimersByTime(1);
+        tick();
         await flushMicrotasks();
 
         expect(claudeCalls).toBe(2);

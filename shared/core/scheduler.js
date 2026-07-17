@@ -2,7 +2,9 @@ import {computeSummary} from './aggregate.js';
 import {createBackoffManager} from './backoff.js';
 import {applyProviderResult, createProviderState} from './state.js';
 
-export const DEFAULT_POLL_INTERVAL_MS = 180_000;
+// 10 minutes: the Claude usage endpoint rate-limits aggressive polling
+// (observed 429 with retry-after ~340s against a 3-minute interval).
+export const DEFAULT_POLL_INTERVAL_MS = 600_000;
 
 function normalizeProviders(providersInput) {
     if (Array.isArray(providersInput)) {

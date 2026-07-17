@@ -94,6 +94,9 @@ function toWarningText(providerLabel, code) {
     if (code === 'NETWORK_ERROR')
         return `${providerLabel}: network error`;
 
+    if (code === 'RATE_LIMITED')
+        return `${providerLabel}: rate limited`;
+
     if (code === 'SCHEMA_CHANGED')
         return `${providerLabel}: schema changed`;
 

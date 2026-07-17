@@ -185,9 +185,8 @@ export function createCodexProvider(options = {}) {
                 if (!normalized.hasPrimaryWindow && !normalized.hasSecondaryWindow)
                     return fail('schema_changed', 'Usage payload is missing expected rate_limit windows');
 
-                if (normalized.hasPartialData)
-                    return fail('partial_data', 'Usage payload is missing primary_window or secondary_window', normalized.data);
-
+                // A single window is a valid payload: the API may report only
+                // the weekly window, so render what exists instead of failing.
                 return ok(normalized.data);
             } catch {
                 return fail('network_error', 'Network request failed while calling Codex APIs');

@@ -122,7 +122,7 @@ describe('Codex provider', () => {
         expect(result.data.sessionRemainingPct).toBe(90);
     });
 
-    test('returns partial_data when secondary_window is missing', async () => {
+    test('returns ok with null weekly when only the session window exists', async () => {
         const provider = createCodexProvider({
             readTextFile: async () => JSON.stringify({
                 tokens: {
@@ -142,14 +142,64 @@ describe('Codex provider', () => {
 
         const result = await provider.getUsage();
 
-        expect(result.ok).toBe(false);
-        expect(result.error.code).toBe('partial_data');
+        expect(result.ok).toBe(true);
         expect(result.data).toEqual({
             sessionRemainingPct: 65,
-            weeklyRemainingPct: 0,
+            weeklyRemainingPct: null,
             sessionResetsAtIso: '2026-02-08T00:00:00.000Z',
             weeklyResetsAtIso: null,
         });
+    });
+
+    test('returns ok when the weekly window arrives as primary_window and secondary_window is null', async () => {
+        const provider = createCodexProvider({
+            readTextFile: async () => JSON.stringify({
+                tokens: {
+                    access_token: 'access-token',
+                    refresh_token: 'refresh-token',
+                },
+            }),
+            fetch: async () => createJsonResponse(200, {
+                rate_limit: {
+                    allowed: true,
+                    limit_reached: false,
+                    primary_window: {
+                        used_percent: 2,
+                        limit_window_seconds: 604_800,
+                        reset_after_seconds: 587_758,
+                        reset_at: 1_784_850_454,
+                    },
+                    secondary_window: null,
+                },
+            }),
+        });
+
+        const result = await provider.getUsage();
+
+        expect(result.ok).toBe(true);
+        expect(result.data).toEqual({
+            sessionRemainingPct: null,
+            weeklyRemainingPct: 98,
+            sessionResetsAtIso: null,
+            weeklyResetsAtIso: '2026-07-23T23:47:34.000Z',
+        });
+    });
+
+    test('returns schema_changed when no rate_limit windows exist', async () => {
+        const provider = createCodexProvider({
+            readTextFile: async () => JSON.stringify({
+                tokens: {
+                    access_token: 'access-token',
+                    refresh_token: 'refresh-token',
+                },
+            }),
+            fetch: async () => createJsonResponse(200, {rate_limit: {}}),
+        });
+
+        const result = await provider.getUsage();
+
+        expect(result.ok).toBe(false);
+        expect(result.error.code).toBe('schema_changed');
     });
 
     test('returns auth_expired when refresh is rejected', async () => {

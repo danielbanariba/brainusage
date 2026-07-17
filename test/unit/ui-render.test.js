@@ -91,6 +91,20 @@ describe('buildUsageViewModel', () => {
         expect(view.services[0].warning).toBe('Codex: partial usage data');
     });
 
+    test('shows rate limited warning while keeping last known data', () => {
+        const view = buildUsageViewModel({
+            providers: {
+                claude: {
+                    code: 'RATE_LIMITED',
+                    data: {sessionRemainingPct: 85, weeklyRemainingPct: 60},
+                },
+            },
+        }, {now: NOW});
+
+        expect(view.services[1].warning).toBe('Claude: rate limited');
+        expect(view.services[1].windows[0].remainingText).toBe('85% left');
+    });
+
     test('formats next update countdown from last update time', () => {
         const view = buildUsageViewModel({
             lastUpdatedAtIso: '2026-02-09T09:58:00.000Z',
