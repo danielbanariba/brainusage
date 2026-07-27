@@ -1,6 +1,6 @@
 # Brain Usage
 
-Tracks your AI usage limits for **Claude** (Anthropic) and **Codex/ChatGPT** (OpenAI) and displays remaining percentages in your desktop panel. Available for both **GNOME Shell** and **KDE Plasma**.
+Tracks your AI usage limits for **Claude** (Anthropic) and **Codex/ChatGPT** (OpenAI) and displays remaining/used percentages in your desktop panel. Available for both **GNOME Shell** and **KDE Plasma**.
 
 ![GNOME Shell 45+](https://img.shields.io/badge/GNOME_Shell-45--49-blue)
 ![KDE Plasma 5/6](https://img.shields.io/badge/KDE_Plasma-5_%26_6-blue)
@@ -10,7 +10,9 @@ Tracks your AI usage limits for **Claude** (Anthropic) and **Codex/ChatGPT** (Op
 
 - Session and weekly usage tracking for Claude and Codex
 - Color-coded progress bars (green / yellow / red) based on remaining percentage
-- Configurable panel label: show minimum across all, or a specific window
+- Configurable panel display: show any combination of Claude/Codex session and week values
+- Provider icons in the panel and popup
+- Toggle the panel percentage between remaining and used
 - Desktop notifications when usage drops below 20%
 - Auto-refresh every 3 minutes with manual refresh option
 - Dark theme with modern card-based popup design
@@ -31,6 +33,7 @@ These credential files are created automatically when you sign in to the respect
 1. Download the latest `brainusage@altairinglorious.shell-extension.zip` from [Releases](https://github.com/AltairInglorious/brainusage/releases/latest)
 
 2. Install via terminal:
+
    ```bash
    gnome-extensions install --force brainusage@altairinglorious.shell-extension.zip
    ```
@@ -87,22 +90,37 @@ bash scripts/kde/install.sh   # auto-detects Plasma 5 vs 6 and installs the matc
 
 Once enabled, a percentage indicator appears in the top panel. Click it to see a detailed breakdown:
 
-- **Session** and **Weekly** usage for each provider
+- **Session** and **Weekly** usage windows for each provider in the popup
 - Progress bars with color-coded status
 - Time until each window resets
 - Next automatic update countdown
 
 ### Panel display modes
 
-On GNOME, open the popup and select **Panel display**; on KDE, right-click the widget → **Configure** → **Panel label**. Choose what the panel label shows:
+On GNOME, open the popup and use the **Panel metrics** switches; on KDE, right-click the widget → **Configure** → **Panel label**. Choose what the panel shows:
 
-| Mode | Description |
-|------|-------------|
-| All (minimum) | Lowest percentage across all windows |
-| Claude Session | Claude session usage only |
-| Claude Weekly | Claude weekly usage only |
-| Codex Session | Codex session usage only |
-| Codex Weekly | Codex weekly usage only |
+| Mode           | Description                       |
+| -------------- | --------------------------------- |
+| Claude Session | Claude session value in the panel |
+| Claude Week    | Claude week value in the panel    |
+| Codex Session  | Codex session value in the panel  |
+| Codex Week     | Codex week value in the panel     |
+
+You can enable more than one of these at the same time, including all four values.
+
+### Panel label style
+
+Open the **Label style** submenu to choose how the panel names its metrics:
+
+- **Compact**: abbreviated labels (`s`, `w`)
+- **Expanded**: full labels (`Session`, `Week`)
+
+### Panel percent mode
+
+Open the **Percent mode** submenu to choose whether the top-bar value shows:
+
+- **Left**: remaining percentage for every selected panel metric
+- **Used**: used percentage for every selected panel metric
 
 ## Development
 
