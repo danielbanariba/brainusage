@@ -222,4 +222,57 @@ describe('scheduler', () => {
         await scheduler.refresh();
         expect(calls).toBe(2);
     });
+
+    test('forced refresh reaches the provider inside the backoff window', async () => {
+        let nowMs = 0;
+        let calls = 0;
+
+        const scheduler = createScheduler({
+            backoffManager: createBackoffManager({
+                initialDelayMs: 100,
+                maxDelayMs: 500,
+                nowMs: () => nowMs,
+            }),
+            providers: {
+                codex: {
+                    async getUsage() {
+                        calls += 1;
+
+                        if (calls === 1) {
+                            return {
+                                ok: false,
+                                error: {
+                                    code: 'rate_limited',
+                                    message: 'slow down',
+                                },
+                            };
+                        }
+
+                        return {
+                            ok: true,
+                            data: {
+                                sessionRemainingPct: 90,
+                                weeklyRemainingPct: 80,
+                            },
+                        };
+                    },
+                },
+            },
+        });
+
+        await scheduler.refresh();
+        expect(calls).toBe(1);
+
+        // Still inside the window: an automatic poll is dropped, as before.
+        await scheduler.refresh();
+        expect(calls).toBe(1);
+
+        // The user pressed Refresh. That must reach the provider.
+        await scheduler.refresh({force: true});
+        expect(calls).toBe(2);
+
+        // A success clears the backoff, so polling resumes normally.
+        await scheduler.refresh();
+        expect(calls).toBe(3);
+    });
 });

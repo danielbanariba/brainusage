@@ -51,12 +51,15 @@ export function createScheduler(options = {}) {
         onUpdate(computeSummary(providerStates));
     }
 
-    function queueProviderRequest(name, provider) {
+    function queueProviderRequest(name, provider, {force = false} = {}) {
         const state = providerStates.get(name);
         if (!state || !provider || typeof provider.getUsage !== 'function')
             return Promise.resolve();
 
-        if (backoffManager.shouldBackoff(name))
+        // Automatic polling still respects the backoff window. A forced refresh
+        // comes from an explicit user action, which is a stronger signal than
+        // the failure history the backoff is protecting against.
+        if (!force && backoffManager.shouldBackoff(name))
             return Promise.resolve();
 
         const requestId = state.latestRequestedRequestId + 1;
@@ -83,8 +86,8 @@ export function createScheduler(options = {}) {
         return state.queue;
     }
 
-    async function refresh() {
-        const runs = providers.map(({name, provider}) => queueProviderRequest(name, provider));
+    async function refresh({force = false} = {}) {
+        const runs = providers.map(({name, provider}) => queueProviderRequest(name, provider, {force}));
         await Promise.all(runs);
         return getSummary();
     }

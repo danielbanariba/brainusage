@@ -26,9 +26,9 @@ PlasmoidItem {
         root.panelLabel = model.panelLabel;
     }
 
-    function pollNow() {
+    function pollNow(force) {
         if (root.appInstance)
-            root.appInstance.refresh();
+            root.appInstance.refresh({force: force === true});
     }
 
     ExecReader { id: reader }
@@ -159,7 +159,7 @@ PlasmoidItem {
                 Layout.alignment: Qt.AlignRight
                 text: i18n("Refresh")
                 icon.name: "view-refresh"
-                onClicked: root.pollNow()
+                onClicked: root.pollNow(true)
             }
 
             Item { Layout.fillHeight: true }
