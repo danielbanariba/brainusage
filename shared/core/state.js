@@ -31,6 +31,7 @@ export function createProviderState(name) {
     return {
         name,
         inFlight: false,
+        inFlightSinceMs: null,
         latestRequestedRequestId: 0,
         latestAppliedRequestId: 0,
         code: null,

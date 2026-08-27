@@ -4,6 +4,13 @@ import {applyProviderResult, createProviderState} from './state.js';
 
 export const DEFAULT_POLL_INTERVAL_MS = 180_000;
 
+// A provider request that never settles blocks that provider's queue forever.
+// It cannot be given a deadline where it runs: Qt's QML XMLHttpRequest
+// implements neither `timeout` nor `ontimeout`, and the QML JS engine has no
+// setTimeout. The poll itself is the only clock available, so a request still
+// in flight after this long is abandoned on the next attempt.
+export const DEFAULT_STALLED_REQUEST_MS = 120_000;
+
 function normalizeProviders(providersInput) {
     if (Array.isArray(providersInput)) {
         return providersInput.map((provider, index) => {
@@ -34,6 +41,8 @@ export function createScheduler(options = {}) {
     const pollIntervalMs = options.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS;
     const nowIso = options.nowIso ?? (() => new Date().toISOString());
     const onUpdate = options.onUpdate ?? null;
+    const nowMs = options.nowMs ?? (() => Date.now());
+    const stalledRequestMs = options.stalledRequestMs ?? DEFAULT_STALLED_REQUEST_MS;
     const setIntervalFn = options.setIntervalFn ?? globalThis.setInterval;
     const clearIntervalFn = options.clearIntervalFn ?? globalThis.clearInterval;
     const backoffManager = options.backoffManager ?? createBackoffManager();
@@ -56,6 +65,17 @@ export function createScheduler(options = {}) {
         if (!state || !provider || typeof provider.getUsage !== 'function')
             return Promise.resolve();
 
+        // Abandon a request that has hung: the queue is a promise chain, so
+        // one that never settles stalls every later refresh. Dropping the
+        // chain loses the dangling request, not the provider.
+        if (state.inFlight
+            && state.inFlightSinceMs !== null
+            && nowMs() - state.inFlightSinceMs >= stalledRequestMs) {
+            state.inFlight = false;
+            state.inFlightSinceMs = null;
+            state.queue = Promise.resolve();
+        }
+
         if (backoffManager.shouldBackoff(name))
             return Promise.resolve();
 
@@ -64,6 +84,7 @@ export function createScheduler(options = {}) {
 
         state.queue = state.queue.then(async () => {
             state.inFlight = true;
+            state.inFlightSinceMs = nowMs();
             notify();
 
             let result;
@@ -76,7 +97,14 @@ export function createScheduler(options = {}) {
 
             applyProviderResult(state, result, requestId, nowIso());
             backoffManager.recordResult(name, result);
-            state.inFlight = false;
+
+            // Only the newest request owns the flag: an abandoned one that
+            // finally settles must not clear it out from under its successor.
+            if (state.latestRequestedRequestId === requestId) {
+                state.inFlight = false;
+                state.inFlightSinceMs = null;
+            }
+
             notify();
         });
 

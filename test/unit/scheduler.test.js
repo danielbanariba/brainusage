@@ -222,4 +222,53 @@ describe('scheduler', () => {
         await scheduler.refresh();
         expect(calls).toBe(2);
     });
+
+    test('abandons a request that never settles instead of stalling the queue', async () => {
+        let nowMs = 0;
+        let calls = 0;
+        const hung = deferred();
+
+        const scheduler = createScheduler({
+            nowMs: () => nowMs,
+            stalledRequestMs: 1000,
+            providers: {
+                claude: {
+                    async getUsage() {
+                        calls += 1;
+
+                        // The first request models a socket left dangling by a
+                        // suspend: it neither resolves nor rejects.
+                        if (calls === 1)
+                            return hung.promise;
+
+                        return {
+                            ok: true,
+                            data: {
+                                sessionRemainingPct: 45,
+                                weeklyRemainingPct: 25,
+                            },
+                        };
+                    },
+                },
+            },
+        });
+
+        void scheduler.refresh();
+        await flushMicrotasks();
+        expect(calls).toBe(1);
+
+        // Still inside the grace period: the queue is legitimately busy.
+        nowMs = 999;
+        void scheduler.refresh();
+        await flushMicrotasks();
+        expect(calls).toBe(1);
+
+        // Past it. The hung request is dropped and a fresh one goes out.
+        nowMs = 1000;
+        await scheduler.refresh();
+        expect(calls).toBe(2);
+
+        const summary = scheduler.getSummary();
+        expect(summary.providers.claude.data.weeklyRemainingPct).toBe(25);
+    });
 });
