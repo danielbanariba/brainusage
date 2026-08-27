@@ -66,7 +66,7 @@ export function createApp(deps) {
     });
 
     return {
-        refresh: function () { return scheduler.refresh(); },
+        refresh: function (options) { return scheduler.refresh(options); },
         getSummary: function () { return scheduler.getSummary(); },
         // Build the render view-model for the current summary at the current time.
         viewModel: function (panelLabelMode) {

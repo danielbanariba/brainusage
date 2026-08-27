@@ -157,7 +157,7 @@ class UsageIndicator extends PanelMenu.Button {
 
         const refreshItem = new PopupMenu.PopupMenuItem('Refresh');
         this._refreshSignalId = refreshItem.connect('activate', () => {
-            void this._scheduler?.refresh();
+            void this._scheduler?.refresh({force: true});
         });
         this._refreshItem = refreshItem;
         this.menu.addMenuItem(refreshItem);
