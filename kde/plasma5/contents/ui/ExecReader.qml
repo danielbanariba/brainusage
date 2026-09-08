@@ -49,4 +49,18 @@ Item {
             return (data["stdout"] || "").replace(/\n+$/, "");
         });
     }
+
+    // runShell(shellCommand) -> Promise<{exitCode, stderr}>
+    // Runs an already fully-composed shell command (e.g. built via
+    // shared/core/keepalive.js#buildShellCommand) through the same
+    // DataSource as readFile/resolveHome, without throwing on a non-zero
+    // exit code -- the caller decides what a failure means.
+    function runShell(cmd) {
+        return reader._run(cmd).then(function (data) {
+            return {
+                exitCode: data["exit code"],
+                stderr: data["stderr"] || ""
+            };
+        });
+    }
 }

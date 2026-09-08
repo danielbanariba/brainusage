@@ -13,6 +13,16 @@ export {
 } from './core/state.js';
 export {createThresholdNotifier} from './core/notifications.js';
 export {normalizeClaudeUsage, normalizeCodexUsage} from './core/normalize.js';
+export {
+    createKeepalive,
+    buildShellCommand,
+    shouldKeepalive,
+    KEEPALIVE_TIMEOUT_SECONDS,
+    KEEPALIVE_EXTRA_PATH_ENTRIES,
+    DEFAULT_KEEPALIVE_COOLDOWN_MS,
+    DEFAULT_KEEPALIVE_GRACE_MS,
+    CLAUDE_PROVIDER_NAME,
+} from './core/keepalive.js';
 export {createClaudeProvider, claudeProviderConfig} from './providers/claude.js';
 export {createCodexProvider, codexProviderConfig} from './providers/codex.js';
 export {

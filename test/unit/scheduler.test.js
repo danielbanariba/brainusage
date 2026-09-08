@@ -222,4 +222,86 @@ describe('scheduler', () => {
         await scheduler.refresh();
         expect(calls).toBe(2);
     });
+
+    test('invokes an injected keepalive controller after each provider result and exposes its status on the summary', async () => {
+        const calls = [];
+        const keepalive = {
+            onProviderResult(name, result) {
+                calls.push({name, result});
+            },
+            getStatus() {
+                return {lastAttemptAt: 123, lastExitCode: 1, lastError: 'boom'};
+            },
+        };
+
+        const scheduler = createScheduler({
+            keepalive,
+            providers: {
+                claude: {
+                    async getUsage() {
+                        return {
+                            ok: true,
+                            data: {sessionRemainingPct: 90, weeklyRemainingPct: 80, sessionResetsAtIso: null},
+                        };
+                    },
+                },
+                codex: {
+                    async getUsage() {
+                        return {ok: true, data: {sessionRemainingPct: 70, weeklyRemainingPct: 60}};
+                    },
+                },
+            },
+        });
+
+        await scheduler.refresh();
+
+        expect(calls).toHaveLength(2);
+        const claudeCall = calls.find((call) => call.name === 'claude');
+        expect(claudeCall.result.code).toBe('OK');
+        expect(claudeCall.result.data).toEqual({
+            sessionRemainingPct: 90,
+            weeklyRemainingPct: 80,
+            sessionResetsAtIso: null,
+        });
+
+        const summary = scheduler.getSummary();
+        expect(summary.keepalive).toEqual({lastAttemptAt: 123, lastExitCode: 1, lastError: 'boom'});
+    });
+
+    test('does not expose a keepalive summary field when no controller is injected', async () => {
+        const scheduler = createScheduler({
+            providers: {
+                claude: {
+                    async getUsage() {
+                        return {ok: true, data: {sessionRemainingPct: 90, weeklyRemainingPct: 80}};
+                    },
+                },
+            },
+        });
+
+        await scheduler.refresh();
+        const summary = scheduler.getSummary();
+        expect(summary.keepalive).toBeUndefined();
+    });
+
+    test('a throwing keepalive controller does not break the poll loop', async () => {
+        const scheduler = createScheduler({
+            keepalive: {
+                onProviderResult() {
+                    throw new Error('keepalive exploded');
+                },
+            },
+            providers: {
+                claude: {
+                    async getUsage() {
+                        return {ok: true, data: {sessionRemainingPct: 90, weeklyRemainingPct: 80}};
+                    },
+                },
+            },
+        });
+
+        const summary = await scheduler.refresh();
+        expect(summary).toBeDefined();
+        expect(summary.providers.claude.code).toBe('OK');
+    });
 });

@@ -211,6 +211,65 @@ describe('buildUsageViewModel', () => {
     });
 });
 
+describe('buildUsageViewModel keepalive warning', () => {
+    test('shows a keepalive failure warning on the claude card only', () => {
+        const view = buildUsageViewModel({
+            providers: {
+                claude: {code: 'OK', data: {sessionRemainingPct: 100, weeklyRemainingPct: 80}},
+                codex: {code: 'OK', data: {sessionRemainingPct: 90, weeklyRemainingPct: 70}},
+            },
+            keepalive: {lastAttemptAt: 123, lastExitCode: 127, lastError: null},
+        }, {now: NOW});
+
+        expect(view.services[1].name).toBe('Claude');
+        expect(view.services[1].warning).toBe('Keepalive failed (exit 127)');
+        expect(view.services[0].warning).toBe('');
+    });
+
+    test('does not show a keepalive warning after a successful attempt', () => {
+        const view = buildUsageViewModel({
+            providers: {
+                claude: {code: 'OK', data: {sessionRemainingPct: 100, weeklyRemainingPct: 80}},
+            },
+            keepalive: {lastAttemptAt: 123, lastExitCode: 0, lastError: null},
+        }, {now: NOW});
+
+        expect(view.services[1].warning).toBe('');
+    });
+
+    test('provider-level warnings take priority over the keepalive warning', () => {
+        const view = buildUsageViewModel({
+            providers: {
+                claude: {code: 'AUTH_EXPIRED', data: null},
+            },
+            keepalive: {lastAttemptAt: 123, lastExitCode: 1, lastError: 'boom'},
+        }, {now: NOW});
+
+        expect(view.services[1].warning).toBe('Claude: authentication expired');
+    });
+
+    test('shows a generic keepalive warning when only an error message is available', () => {
+        const view = buildUsageViewModel({
+            providers: {
+                claude: {code: 'OK', data: {sessionRemainingPct: 100, weeklyRemainingPct: 80}},
+            },
+            keepalive: {lastAttemptAt: 123, lastExitCode: null, lastError: 'spawn failed'},
+        }, {now: NOW});
+
+        expect(view.services[1].warning).toBe('Keepalive failed (error)');
+    });
+
+    test('no keepalive warning when the summary carries no keepalive status', () => {
+        const view = buildUsageViewModel({
+            providers: {
+                claude: {code: 'OK', data: {sessionRemainingPct: 100, weeklyRemainingPct: 80}},
+            },
+        }, {now: NOW});
+
+        expect(view.services[1].warning).toBe('');
+    });
+});
+
 describe('formatRelativeTime', () => {
     test('formats hours and minutes', () => {
         const reset = '2026-02-09T12:18:00.000Z';

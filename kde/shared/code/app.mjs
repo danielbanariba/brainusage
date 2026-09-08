@@ -9,6 +9,7 @@ import {
     createClaudeProvider,
     createCodexProvider,
     createThresholdNotifier,
+    createKeepalive,
     buildUsageViewModel,
     DEFAULT_POLL_INTERVAL_MS,
     PANEL_LABEL_MODES,
@@ -35,11 +36,15 @@ export function modeLabel(mode) {
     return MODE_LABELS[mode] || mode;
 }
 
-// deps: { fetchImpl, readTextFile, homeDir, notify, onUpdate }
+// deps: { fetchImpl, readTextFile, homeDir, notify, onUpdate, isEnabled, getCommand, runCommand }
 //  - fetchImpl/readTextFile: from runtime.js (XHR-backed)
 //  - homeDir: resolved in QML via StandardPaths (no trailing slash)
 //  - notify(title, body): triggers a QML Notification
 //  - onUpdate(summary): called whenever provider state changes (re-render hook)
+//  - isEnabled(): reads Plasmoid.configuration.keepaliveEnabled live
+//  - getCommand(): reads Plasmoid.configuration.keepaliveCommand live
+//  - runCommand(shellCommand): runs it through the executable DataSource,
+//    resolving to {exitCode, stderr}
 export function createApp(deps) {
     deps = deps || {};
     const fetchImpl = deps.fetchImpl;
@@ -47,10 +52,19 @@ export function createApp(deps) {
     const homeDir = deps.homeDir || null;
     const notify = typeof deps.notify === 'function' ? deps.notify : function () {};
     const onUpdate = typeof deps.onUpdate === 'function' ? deps.onUpdate : function () {};
+    const isEnabled = typeof deps.isEnabled === 'function' ? deps.isEnabled : function () { return false; };
+    const getCommand = typeof deps.getCommand === 'function' ? deps.getCommand : function () { return ''; };
+    const runCommand = typeof deps.runCommand === 'function' ? deps.runCommand : null;
 
     const claude = createClaudeProvider({fetch: fetchImpl, readTextFile, homeDir});
     const codex = createCodexProvider({fetch: fetchImpl, readTextFile, homeDir});
     const notifier = createThresholdNotifier({notifyFn: notify});
+    const keepalive = createKeepalive({
+        isEnabled: isEnabled,
+        getCommand: getCommand,
+        runCommand: runCommand,
+        now: function () { return Date.now(); },
+    });
 
     let lastSummary = null;
 
@@ -58,6 +72,7 @@ export function createApp(deps) {
         providers: {claude, codex},
         setIntervalFn: noopSetInterval,
         clearIntervalFn: noopClearInterval,
+        keepalive: keepalive,
         onUpdate: function (summary) {
             lastSummary = summary;
             notifier.evaluate(summary);
