@@ -55,6 +55,30 @@ bash scripts/gnome/install.sh
 bash scripts/gnome/enable.sh
 ```
 
+### Session keepalive (Claude, opt-in)
+
+Anthropic's Claude subscription tracks usage in a 5-hour session window that
+opens at your first message and closes exactly 5 hours later. If that first
+message happens late in the day, the fixed window can push the next reset
+later than it needs to be.
+
+The GNOME extension can optionally send one tiny message to Claude (the
+smallest model, "haiku") whenever it detects that no session window is
+currently active, so the window opens right away — e.g. at boot — instead of
+at your first real message, moving the reset earlier instead of later. This
+never makes things worse: unused quota does not carry over, and your weekly
+limit is unaffected. There is no preferences UI, so enable it with
+`gsettings`; it is off by default. See `extension/README.md` for the exact
+commands — a user-scope install needs `GSETTINGS_SCHEMA_DIR` pointed at the
+extension's own schema directory for plain `gsettings` to find it.
+
+Cost: each ping uses about 240 input tokens, and the extension sends at most
+a few per day (it waits at least 30 minutes between attempts and never pings
+while a session window is already open). Because GNOME Shell does not
+inherit your shell's `PATH`, the extension prepends `$HOME/.local/bin` and
+`$HOME/.claude/local` before running the command; if `claude` is installed
+somewhere else, set an absolute path in the `keepalive-command` key.
+
 ## Installation — KDE Plasma
 
 ### From GitHub Releases
@@ -106,7 +130,8 @@ inherit your shell's `PATH`, the widget prepends `$HOME/.local/bin` and
 somewhere else, set an absolute path in the advanced **Keepalive command**
 field.
 
-GNOME parity for this feature is a follow-up — it is currently KDE-only.
+GNOME has parity for this feature — see the equivalent section under
+[Installation — GNOME](#installation--gnome) above.
 
 ## Usage
 

@@ -10,10 +10,12 @@ import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
 
 import {createScheduler, DEFAULT_POLL_INTERVAL_MS} from './lib/core/scheduler.js';
 import {createThresholdNotifier} from './lib/core/notifications.js';
+import {createKeepalive} from './lib/core/keepalive.js';
 import {createClaudeProvider} from './lib/providers/claude.js';
 import {createCodexProvider} from './lib/providers/codex.js';
 import {readTextFile} from './lib/runtime/fs.js';
 import {createFetch} from './lib/runtime/fetch.js';
+import {runShell} from './lib/runtime/process.js';
 import {buildUsageViewModel, PANEL_LABEL_MODES} from './lib/ui/render.js';
 
 const FILL_CLASSES = {
@@ -308,8 +310,20 @@ export default class UsageLimitsExtension extends Extension {
             },
         });
 
+        // isEnabled/getCommand read this._settings lazily at call time (not
+        // at closure-creation time here), and are only ever invoked from
+        // inside the scheduler's async poll loop -- well after enable() has
+        // returned and this._settings below has been assigned.
+        this._keepalive = createKeepalive({
+            isEnabled: () => this._settings.get_boolean('keepalive-enabled'),
+            getCommand: () => this._settings.get_string('keepalive-command'),
+            runCommand: runShell,
+            now: () => Date.now(),
+        });
+
         this._scheduler = createScheduler({
             providers: {claude, codex},
+            keepalive: this._keepalive,
             onUpdate: (summary) => {
                 this._indicator?.render(summary);
                 this._thresholdNotifier?.evaluate(summary);
@@ -326,6 +340,7 @@ export default class UsageLimitsExtension extends Extension {
         this._scheduler?.stop();
         this._scheduler = null;
         this._thresholdNotifier = null;
+        this._keepalive = null;
 
         this._fetchRuntime?.dispose();
         this._fetchRuntime = null;
