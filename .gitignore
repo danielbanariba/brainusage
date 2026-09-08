@@ -2,6 +2,7 @@ node_modules/
 *.shell-extension.zip
 *.plasmoid
 .sisyphus/
+.codegraph/
 
 # Core vendored from shared/ into platform packages at build time
 extension/lib/core/
