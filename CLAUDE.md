@@ -45,7 +45,7 @@ shared/core/state.js     → Per-provider state machine (OK/PARTIAL_DATA/AUTH_EX
 shared/core/backoff.js   → Exponential backoff (30s initial, 15m cap, on 2+ consecutive network errors or 429)
 shared/core/notifications.js → Fires notifyFn() when usage crosses below 20%, deduplicates per window
 shared/core/normalize.js → Extracts remaining% from Claude/Codex API response shapes
-shared/core/keepalive.js → Opt-in: pings Claude to open the 5-hour session window when none is active (KDE only)
+shared/core/keepalive.js → Opt-in: pings Claude to open the 5-hour session window when none is active
 shared/core/http.js      → encodeForm(): form-urlencoded body string (no URLSearchParams; see KDE notes)
 shared/providers/claude.js → OAuth refresh + usage fetch against api.anthropic.com
 shared/providers/codex.js  → OAuth refresh + usage fetch against chatgpt.com
