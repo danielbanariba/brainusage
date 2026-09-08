@@ -69,7 +69,10 @@ Item {
                 readTextFile: function (p) { return reader.readFile(p); },
                 homeDir: homeDir,
                 notify: function (t, b) { root.notify(t, b); },
-                onUpdate: function () { root.rebuild(); }
+                onUpdate: function () { root.rebuild(); },
+                isEnabled: function () { return plasmoid.configuration.keepaliveEnabled; },
+                getCommand: function () { return plasmoid.configuration.keepaliveCommand; },
+                runCommand: function (shellCommand) { return reader.runShell(shellCommand); }
             });
             root.rebuild();
             root.pollNow();

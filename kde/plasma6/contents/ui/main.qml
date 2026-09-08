@@ -68,7 +68,10 @@ PlasmoidItem {
                 readTextFile: function (p) { return reader.readFile(p); },
                 homeDir: homeDir,
                 notify: function (t, b) { root.notify(t, b); },
-                onUpdate: function () { root.rebuild(); }
+                onUpdate: function () { root.rebuild(); },
+                isEnabled: function () { return Plasmoid.configuration.keepaliveEnabled; },
+                getCommand: function () { return Plasmoid.configuration.keepaliveCommand; },
+                runCommand: function (shellCommand) { return reader.runShell(shellCommand); }
             });
             root.rebuild();
             root.pollNow();

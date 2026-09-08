@@ -8,5 +8,13 @@
             <label>Which metric to show in the panel</label>
             <default>min</default>
         </entry>
+        <entry name="keepaliveEnabled" type="Bool">
+            <label>Keep the Claude session window open</label>
+            <default>false</default>
+        </entry>
+        <entry name="keepaliveCommand" type="String">
+            <label>Command used to ping Claude and open the 5-hour session window</label>
+            <default>claude -p ok --model haiku --strict-mcp-config --setting-sources &quot;&quot; --no-session-persistence --tools &quot;&quot; --system-prompt &quot;Reply with the single word: ok&quot;</default>
+        </entry>
     </group>
 </kcfg>
