@@ -100,6 +100,24 @@ function toWarningText(providerLabel, code) {
     return '';
 }
 
+// Renders one minimal warning line when the last session-keepalive attempt
+// failed (non-zero exit or error). Never shown after a successful attempt or
+// before any attempt has been made.
+function toKeepaliveWarningText(keepaliveStatus) {
+    if (!keepaliveStatus)
+        return '';
+
+    const {lastExitCode, lastError} = keepaliveStatus;
+
+    if (Number.isFinite(lastExitCode) && lastExitCode !== 0)
+        return `Keepalive failed (exit ${lastExitCode})`;
+
+    if (!Number.isFinite(lastExitCode) && lastError)
+        return 'Keepalive failed (error)';
+
+    return '';
+}
+
 function buildWindowViewModel(label, remainingPct, resetsAtIso, now) {
     return {
         label,
@@ -110,7 +128,7 @@ function buildWindowViewModel(label, remainingPct, resetsAtIso, now) {
     };
 }
 
-function buildServiceViewModel(name, providerData, providerCode, now) {
+function buildServiceViewModel(name, providerData, providerCode, now, keepaliveStatus) {
     const data = providerData ?? null;
 
     return {
@@ -129,7 +147,7 @@ function buildServiceViewModel(name, providerData, providerCode, now) {
                 now,
             ),
         ],
-        warning: toWarningText(name, providerCode),
+        warning: toWarningText(name, providerCode) || toKeepaliveWarningText(keepaliveStatus),
     };
 }
 
@@ -159,12 +177,13 @@ export function buildUsageViewModel(summary, deps = {}) {
 
     const claude = summary?.providers?.claude ?? null;
     const codex = summary?.providers?.codex ?? null;
+    const keepaliveStatus = summary?.keepalive ?? null;
 
     return {
         panelLabel: formatPercent(getPanelLabelValue(summary, panelLabelMode)),
         services: [
             buildServiceViewModel('Codex', codex?.data, codex?.code, now),
-            buildServiceViewModel('Claude', claude?.data, claude?.code, now),
+            buildServiceViewModel('Claude', claude?.data, claude?.code, now, keepaliveStatus),
         ],
         version,
         lastUpdate: formatNextUpdate(summary?.lastUpdatedAtIso, pollIntervalMs, now),

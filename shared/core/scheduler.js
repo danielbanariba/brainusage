@@ -37,6 +37,7 @@ export function createScheduler(options = {}) {
     const setIntervalFn = options.setIntervalFn ?? globalThis.setInterval;
     const clearIntervalFn = options.clearIntervalFn ?? globalThis.clearInterval;
     const backoffManager = options.backoffManager ?? createBackoffManager();
+    const keepalive = options.keepalive ?? null;
     const providerStates = new Map();
 
     for (const {name} of providers)
@@ -44,11 +45,20 @@ export function createScheduler(options = {}) {
 
     let timerId = null;
 
+    function buildSummary() {
+        const summary = computeSummary(providerStates);
+
+        if (keepalive && typeof keepalive.getStatus === 'function')
+            summary.keepalive = keepalive.getStatus();
+
+        return summary;
+    }
+
     function notify() {
         if (typeof onUpdate !== 'function')
             return;
 
-        onUpdate(computeSummary(providerStates));
+        onUpdate(buildSummary());
     }
 
     function queueProviderRequest(name, provider) {
@@ -76,6 +86,15 @@ export function createScheduler(options = {}) {
 
             applyProviderResult(state, result, requestId, nowIso());
             backoffManager.recordResult(name, result);
+
+            if (keepalive && typeof keepalive.onProviderResult === 'function') {
+                try {
+                    keepalive.onProviderResult(name, {code: state.code, data: state.data});
+                } catch {
+                    // A misbehaving keepalive controller must never break the poll loop.
+                }
+            }
+
             state.inFlight = false;
             notify();
         });
@@ -109,7 +128,7 @@ export function createScheduler(options = {}) {
     }
 
     function getSummary() {
-        return computeSummary(providerStates);
+        return buildSummary();
     }
 
     return {
