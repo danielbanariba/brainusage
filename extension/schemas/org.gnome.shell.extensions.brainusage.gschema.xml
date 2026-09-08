@@ -9,5 +9,24 @@
         Options: min, claude-session, claude-weekly, codex-session, codex-weekly
       </description>
     </key>
+    <key name="keepalive-enabled" type="b">
+      <default>false</default>
+      <summary>Keep the Claude session window open</summary>
+      <description>
+        When enabled, sends one tiny message to Claude whenever no 5-hour
+        session window is currently active, so the window opens now instead
+        of at your next real message. Off by default.
+      </description>
+    </key>
+    <key name="keepalive-command" type="s">
+      <default>'claude -p ok --model haiku --strict-mcp-config --setting-sources "" --no-session-persistence --tools "" --system-prompt "Reply with the single word: ok"'</default>
+      <summary>Command used to ping Claude and open the 5-hour session window</summary>
+      <description>
+        GNOME Shell does not see the user's login shell PATH, so
+        buildShellCommand() already prepends $HOME/.local/bin and
+        $HOME/.claude/local to PATH before running this command. An absolute
+        path to the claude binary may be needed for unusual installs.
+      </description>
+    </key>
   </schema>
 </schemalist>
