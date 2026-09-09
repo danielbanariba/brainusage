@@ -275,6 +275,32 @@ describe('createKeepalive', () => {
         expect(typeof status.lastAttemptAt).toBe('number');
     });
 
+    test('logs a success message when the command exits cleanly', async () => {
+        const logs = [];
+        const {controller} = makeController({
+            runCommand: async () => ({exitCode: 0, stderr: ''}),
+            log: (message) => logs.push(message),
+        });
+
+        controller.onProviderResult(CLAUDE_PROVIDER_NAME, {code: 'OK', data: {sessionResetsAtIso: null}});
+        await flushMicrotasks();
+
+        expect(logs).toEqual(['keepalive: ping succeeded']);
+    });
+
+    test('logs the error when the command exits with a non-zero code', async () => {
+        const logs = [];
+        const {controller} = makeController({
+            runCommand: async () => ({exitCode: 127, stderr: 'command not found'}),
+            log: (message) => logs.push(message),
+        });
+
+        controller.onProviderResult(CLAUDE_PROVIDER_NAME, {code: 'OK', data: {sessionResetsAtIso: null}});
+        await flushMicrotasks();
+
+        expect(logs).toEqual(['keepalive: command not found']);
+    });
+
     test('records a rejected runCommand as an error without throwing out of the caller', async () => {
         const {controller} = makeController({
             runCommand: async () => { throw new Error('spawn failed'); },

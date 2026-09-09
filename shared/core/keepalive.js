@@ -114,9 +114,14 @@ export function createKeepalive(options = {}) {
             const outcome = await runCommand(shellCommand);
             const exitCode = outcome?.exitCode;
             lastExitCode = Number.isFinite(exitCode) ? exitCode : null;
-            lastError = lastExitCode === 0
-                ? null
-                : (outcome?.stderr || `command exited with code ${lastExitCode}`);
+
+            if (lastExitCode === 0) {
+                lastError = null;
+                log('keepalive: ping succeeded');
+            } else {
+                lastError = outcome?.stderr || `command exited with code ${lastExitCode}`;
+                log(`keepalive: ${lastError}`);
+            }
         } catch (error) {
             lastExitCode = null;
             lastError = error?.message ?? String(error);

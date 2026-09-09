@@ -64,6 +64,7 @@ export function createApp(deps) {
         getCommand: getCommand,
         runCommand: runCommand,
         now: function () { return Date.now(); },
+        log: function (message) { console.log(message); },
     });
 
     let lastSummary = null;
