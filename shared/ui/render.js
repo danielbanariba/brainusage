@@ -177,17 +177,27 @@ export function buildUsageViewModel(summary, deps = {}) {
     const version = deps.version ?? VERSION;
     const pollIntervalMs = deps.pollIntervalMs ?? 180_000;
     const panelLabelMode = deps.panelLabelMode ?? 'min';
+    const claudeLabel = deps.claudeLabel ?? 'Claude';
+    const secondClaudeKey = deps.secondClaudeKey ?? null;
+    const secondClaudeLabel = deps.secondClaudeLabel ?? 'Claude 2';
 
     const claude = summary?.providers?.claude ?? null;
     const codex = summary?.providers?.codex ?? null;
     const keepaliveStatus = summary?.keepalive ?? null;
 
+    const services = [
+        buildServiceViewModel('Codex', codex?.data, codex?.code, now),
+        buildServiceViewModel(claudeLabel, claude?.data, claude?.code, now, keepaliveStatus),
+    ];
+
+    if (secondClaudeKey) {
+        const secondClaude = summary?.providers?.[secondClaudeKey] ?? null;
+        services.push(buildServiceViewModel(secondClaudeLabel, secondClaude?.data, secondClaude?.code, now));
+    }
+
     return {
         panelLabel: formatPercent(getPanelLabelValue(summary, panelLabelMode)),
-        services: [
-            buildServiceViewModel('Codex', codex?.data, codex?.code, now),
-            buildServiceViewModel('Claude', claude?.data, claude?.code, now, keepaliveStatus),
-        ],
+        services,
         version,
         lastUpdate: formatNextUpdate(summary?.lastUpdatedAtIso, pollIntervalMs, now),
     };

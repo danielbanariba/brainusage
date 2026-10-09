@@ -1,6 +1,9 @@
 const DEFAULT_THRESHOLD_PCT = 20;
 
-const PROVIDERS = [
+// Default provider/label pairs for the single-account setup. app.mjs passes
+// a custom list (adding the second Claude account under its own key/label)
+// only when a second account is configured, keeping this default unchanged.
+const DEFAULT_PROVIDERS = [
     {key: 'claude', label: 'Claude'},
     {key: 'codex', label: 'Codex'},
 ];
@@ -48,10 +51,13 @@ export function createThresholdNotifier(options = {}) {
     const notifyFn = typeof options.notifyFn === 'function'
         ? options.notifyFn
         : () => {};
+    const providers = Array.isArray(options.providers) && options.providers.length > 0
+        ? options.providers
+        : DEFAULT_PROVIDERS;
     const state = new Map();
 
     function evaluate(summary) {
-        for (const provider of PROVIDERS) {
+        for (const provider of providers) {
             const providerData = summary?.providers?.[provider.key]?.data;
             if (!providerData)
                 continue;

@@ -211,6 +211,57 @@ describe('buildUsageViewModel', () => {
     });
 });
 
+describe('buildUsageViewModel multi-account Claude cards', () => {
+    test('renders the Claude card under a custom claudeLabel', () => {
+        const view = buildUsageViewModel({
+            providers: {
+                claude: {code: 'OK', data: {sessionRemainingPct: 60, weeklyRemainingPct: 25}},
+            },
+        }, {now: NOW, claudeLabel: 'Work Claude'});
+
+        expect(view.services).toHaveLength(2);
+        expect(view.services[1].name).toBe('Work Claude');
+    });
+
+    test('adds a second Claude card right after the first when configured, keeping Codex first', () => {
+        const view = buildUsageViewModel({
+            providers: {
+                codex: {code: 'OK', data: {sessionRemainingPct: 73, weeklyRemainingPct: 91}},
+                claude: {code: 'OK', data: {sessionRemainingPct: 60, weeklyRemainingPct: 25}},
+                claude2: {code: 'OK', data: {sessionRemainingPct: 40, weeklyRemainingPct: 15}},
+            },
+        }, {now: NOW, secondClaudeKey: 'claude2', secondClaudeLabel: 'Personal Claude'});
+
+        expect(view.services.map((svc) => svc.name)).toEqual(['Codex', 'Claude', 'Personal Claude']);
+        expect(view.services[2].windows[0].remainingText).toBe('40% left');
+    });
+
+    test('does not add a second Claude card when secondClaudeKey is not configured', () => {
+        const view = buildUsageViewModel({
+            providers: {
+                codex: {code: 'OK', data: {sessionRemainingPct: 73, weeklyRemainingPct: 91}},
+                claude: {code: 'OK', data: {sessionRemainingPct: 60, weeklyRemainingPct: 25}},
+            },
+        }, {now: NOW});
+
+        expect(view.services).toHaveLength(2);
+    });
+
+    test('shows an error on the second Claude card only when its credentials are missing', () => {
+        const view = buildUsageViewModel({
+            providers: {
+                codex: {code: 'OK', data: {sessionRemainingPct: 73, weeklyRemainingPct: 91}},
+                claude: {code: 'OK', data: {sessionRemainingPct: 60, weeklyRemainingPct: 25}},
+                claude2: {code: 'AUTH_EXPIRED', data: null},
+            },
+        }, {now: NOW, secondClaudeKey: 'claude2', secondClaudeLabel: 'Personal Claude'});
+
+        expect(view.services[2].warning).toBe('Personal Claude: authentication expired');
+        expect(view.services[0].warning).toBe('');
+        expect(view.services[1].warning).toBe('');
+    });
+});
+
 describe('buildUsageViewModel keepalive warning', () => {
     test('shows a keepalive failure warning on the claude card only', () => {
         const view = buildUsageViewModel({

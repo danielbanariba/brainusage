@@ -236,6 +236,46 @@ describe('threshold notifications', () => {
         ]);
     });
 
+    test('uses a custom provider list to label a second Claude account distinctly', () => {
+        const notifications = [];
+        const notifier = createThresholdNotifier({
+            notifyFn: (title, body) => {
+                notifications.push({title, body});
+            },
+            providers: [
+                {key: 'claude', label: 'Work Claude'},
+                {key: 'claude2', label: 'Personal Claude'},
+            ],
+        });
+
+        notifier.evaluate({
+            providers: {
+                claude: {
+                    data: {sessionRemainingPct: 80, weeklyRemainingPct: 75},
+                },
+                claude2: {
+                    data: {sessionRemainingPct: 80, weeklyRemainingPct: 75},
+                },
+            },
+        });
+
+        notifier.evaluate({
+            providers: {
+                claude: {
+                    data: {sessionRemainingPct: 19, weeklyRemainingPct: 75},
+                },
+                claude2: {
+                    data: {sessionRemainingPct: 10, weeklyRemainingPct: 75},
+                },
+            },
+        });
+
+        expect(notifications.map((item) => item.title)).toEqual([
+            'Work Claude session low',
+            'Personal Claude session low',
+        ]);
+    });
+
     test('does not notify on first observation already below threshold', () => {
         const notifications = [];
         const notifier = createThresholdNotifier({
