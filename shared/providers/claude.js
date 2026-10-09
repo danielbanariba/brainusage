@@ -11,11 +11,11 @@ function defaultReadTextFile() {
     throw new Error('readTextFile dependency is required in this runtime');
 }
 
-function resolveCredentialsPath(homeDir) {
-    if (homeDir && CREDENTIALS_PATH.startsWith('~/'))
-        return `${homeDir}${CREDENTIALS_PATH.slice(1)}`;
+function resolveCredentialsPath(homeDir, credentialsPath = CREDENTIALS_PATH) {
+    if (homeDir && credentialsPath.startsWith('~/'))
+        return `${homeDir}${credentialsPath.slice(1)}`;
 
-    return CREDENTIALS_PATH;
+    return credentialsPath;
 }
 
 function resolveAccessToken(credentials) {
@@ -160,7 +160,7 @@ export function createClaudeProvider(options = {}) {
     const fetchImpl = options.fetch ?? globalThis.fetch;
     const readTextFile = options.readTextFile ?? defaultReadTextFile;
     const homeDir = options.homeDir ?? globalThis.process?.env?.HOME ?? null;
-    const credentialsPath = resolveCredentialsPath(homeDir);
+    const credentialsPath = resolveCredentialsPath(homeDir, options.credentialsPath);
 
     return {
         async getUsage() {

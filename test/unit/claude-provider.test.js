@@ -160,6 +160,54 @@ describe('Claude provider', () => {
         expect(result.error.code).toBe('auth_expired');
     });
 
+    test('uses the default credentials path with home dir expansion when no override is given', async () => {
+        let requestedPath = null;
+        const provider = createClaudeProvider({
+            homeDir: '/home/user',
+            readTextFile: async (path) => {
+                requestedPath = path;
+                throw new Error('ENOENT');
+            },
+            fetch: async () => createJsonResponse(200, {}),
+        });
+
+        await provider.getUsage();
+
+        expect(requestedPath).toBe('/home/user/.claude/.credentials.json');
+    });
+
+    test('reads credentials from a custom credentialsPath option, expanding ~ the same way', async () => {
+        let requestedPath = null;
+        const provider = createClaudeProvider({
+            credentialsPath: '~/.claude-work/.credentials.json',
+            homeDir: '/home/user',
+            readTextFile: async (path) => {
+                requestedPath = path;
+                return JSON.stringify({
+                    claudeAiOauth: {
+                        access_token: 'work-token',
+                        refresh_token: 'refresh-token',
+                    },
+                });
+            },
+            fetch: async (url) => {
+                if (url === claudeProviderConfig.USAGE_ENDPOINT) {
+                    return createJsonResponse(200, {
+                        five_hour: {utilization: 20, resets_at: '2026-02-09T00:00:00.000Z'},
+                        seven_day: {utilization: 30, resets_at: '2026-02-12T00:00:00.000Z'},
+                    });
+                }
+
+                throw new Error(`Unexpected URL: ${url}`);
+            },
+        });
+
+        const result = await provider.getUsage();
+
+        expect(requestedPath).toBe('/home/user/.claude-work/.credentials.json');
+        expect(result.ok).toBe(true);
+    });
+
     test('returns network_error when fetch throws', async () => {
         const provider = createClaudeProvider({
             readTextFile: async () => JSON.stringify({
