@@ -14,6 +14,7 @@ PlasmoidItem {
     property var appInstance: null
     property var vm: null
     property string panelLabel: "--"
+    property var homeDir: null
 
     toolTipMainText: i18n("Brain Usage")
     toolTipSubText: root.panelLabel
@@ -29,6 +30,32 @@ PlasmoidItem {
     function pollNow(force) {
         if (root.appInstance)
             root.appInstance.refresh({force: force === true});
+    }
+
+    // Builds (or rebuilds) the app instance from the current config values.
+    // Re-run on every change to claudeLabel/secondClaudeCredentialsPath/
+    // secondClaudeLabel so those take effect immediately, the same as
+    // panelLabelMode does, without requiring a plasmashell restart: a second
+    // provider is wired into a fresh scheduler at createApp() time, so
+    // adding/removing/relabeling it needs a fresh app instance.
+    function initApp() {
+        if (root.homeDir === null)
+            return;
+        root.appInstance = App.createApp({
+            fetchImpl: Runtime.xhrFetch,
+            readTextFile: function (p) { return reader.readFile(p); },
+            homeDir: root.homeDir,
+            notify: function (t, b) { root.notify(t, b); },
+            onUpdate: function () { root.rebuild(); },
+            isEnabled: function () { return Plasmoid.configuration.keepaliveEnabled; },
+            getCommand: function () { return Plasmoid.configuration.keepaliveCommand; },
+            runCommand: function (shellCommand) { return reader.runShell(shellCommand); },
+            claudeLabel: Plasmoid.configuration.claudeLabel,
+            secondClaudeCredentialsPath: Plasmoid.configuration.secondClaudeCredentialsPath,
+            secondClaudeLabel: Plasmoid.configuration.secondClaudeLabel
+        });
+        root.rebuild();
+        root.pollNow();
     }
 
     ExecReader { id: reader }
@@ -63,18 +90,8 @@ PlasmoidItem {
 
     Component.onCompleted: {
         reader.resolveHome().then(function (homeDir) {
-            root.appInstance = App.createApp({
-                fetchImpl: Runtime.xhrFetch,
-                readTextFile: function (p) { return reader.readFile(p); },
-                homeDir: homeDir,
-                notify: function (t, b) { root.notify(t, b); },
-                onUpdate: function () { root.rebuild(); },
-                isEnabled: function () { return Plasmoid.configuration.keepaliveEnabled; },
-                getCommand: function () { return Plasmoid.configuration.keepaliveCommand; },
-                runCommand: function (shellCommand) { return reader.runShell(shellCommand); }
-            });
-            root.rebuild();
-            root.pollNow();
+            root.homeDir = homeDir;
+            root.initApp();
         });
     }
 
@@ -95,6 +112,9 @@ PlasmoidItem {
     Connections {
         target: Plasmoid.configuration
         function onPanelLabelModeChanged() { root.rebuild(); }
+        function onClaudeLabelChanged() { root.initApp(); }
+        function onSecondClaudeCredentialsPathChanged() { root.initApp(); }
+        function onSecondClaudeLabelChanged() { root.initApp(); }
     }
 
     compactRepresentation: MouseArea {

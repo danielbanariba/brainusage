@@ -10,6 +10,9 @@ Kirigami.FormLayout {
     property string cfg_panelLabelMode: "min"
     property bool cfg_keepaliveEnabled: false
     property string cfg_keepaliveCommand: ""
+    property string cfg_claudeLabel: "Claude"
+    property string cfg_secondClaudeCredentialsPath: ""
+    property string cfg_secondClaudeLabel: "Claude 2"
 
     QQC2.ComboBox {
         id: modeCombo
@@ -57,5 +60,36 @@ Kirigami.FormLayout {
         font.pixelSize: 11
         opacity: 0.7
         text: i18n("Advanced: plasmashell does not see your shell PATH, so use an absolute path if claude is installed somewhere unusual.")
+    }
+
+    QQC2.TextField {
+        id: claudeLabelField
+        Kirigami.FormData.label: i18n("Claude card label:")
+        onTextEdited: page.cfg_claudeLabel = text
+        Component.onCompleted: text = page.cfg_claudeLabel
+    }
+
+    QQC2.TextField {
+        id: secondClaudeCredentialsPathField
+        Kirigami.FormData.label: i18n("Second Claude credentials file:")
+        placeholderText: "~/.claude-work/.credentials.json"
+        onTextEdited: page.cfg_secondClaudeCredentialsPath = text
+        Component.onCompleted: text = page.cfg_secondClaudeCredentialsPath
+    }
+
+    QQC2.Label {
+        Layout.fillWidth: true
+        wrapMode: Text.WordWrap
+        font.pixelSize: 11
+        opacity: 0.7
+        text: i18n("Leave empty to show only one Claude card. Set it to show a second Claude account (e.g. a separate CLAUDE_CONFIG_DIR) in its own card.")
+    }
+
+    QQC2.TextField {
+        id: secondClaudeLabelField
+        Kirigami.FormData.label: i18n("Second Claude card label:")
+        enabled: page.cfg_secondClaudeCredentialsPath.length > 0
+        onTextEdited: page.cfg_secondClaudeLabel = text
+        Component.onCompleted: text = page.cfg_secondClaudeLabel
     }
 }

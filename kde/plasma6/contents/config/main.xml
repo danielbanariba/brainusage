@@ -16,5 +16,17 @@
             <label>Command used to ping Claude and open the 5-hour session window</label>
             <default>claude -p ok --model haiku --strict-mcp-config --setting-sources &quot;&quot; --no-session-persistence --tools &quot;&quot; --system-prompt &quot;Reply with the single word: ok&quot;</default>
         </entry>
+        <entry name="claudeLabel" type="String">
+            <label>Card label for the primary Claude account</label>
+            <default>Claude</default>
+        </entry>
+        <entry name="secondClaudeCredentialsPath" type="String">
+            <label>Credentials file for a second Claude account; empty disables the second card</label>
+            <default></default>
+        </entry>
+        <entry name="secondClaudeLabel" type="String">
+            <label>Card label for the second Claude account</label>
+            <default>Claude 2</default>
+        </entry>
     </group>
 </kcfg>
