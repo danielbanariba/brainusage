@@ -264,6 +264,64 @@ describe('buildUsageViewModel', () => {
 
         expect(view.panelLabel).toBe('W 60% · P --');
     });
+
+    test('panelLabelMode min-available skips exhausted providers and shows the lowest of the rest', () => {
+        const view = buildUsageViewModel({
+            providers: {
+                claude: {code: 'OK', data: {sessionRemainingPct: 0, weeklyRemainingPct: 50}},
+                claude2: {code: 'OK', data: {sessionRemainingPct: 19, weeklyRemainingPct: 40}},
+                codex: {code: 'OK', data: {sessionRemainingPct: 98, weeklyRemainingPct: 99}},
+            },
+        }, {now: NOW, panelLabelMode: 'min-available', secondClaudeKey: 'claude2'});
+
+        expect(view.panelLabel).toBe('19%');
+    });
+
+    test('panelLabelMode min-available falls through to the next-lowest when the lowest is also exhausted', () => {
+        const view = buildUsageViewModel({
+            providers: {
+                claude: {code: 'OK', data: {sessionRemainingPct: 0, weeklyRemainingPct: 50}},
+                claude2: {code: 'OK', data: {sessionRemainingPct: 0, weeklyRemainingPct: 40}},
+                codex: {code: 'OK', data: {sessionRemainingPct: 98, weeklyRemainingPct: 99}},
+            },
+        }, {now: NOW, panelLabelMode: 'min-available', secondClaudeKey: 'claude2'});
+
+        expect(view.panelLabel).toBe('98%');
+    });
+
+    test('panelLabelMode min-available shows 0% when every provider with data is exhausted', () => {
+        const view = buildUsageViewModel({
+            providers: {
+                claude: {code: 'OK', data: {sessionRemainingPct: 0, weeklyRemainingPct: 0}},
+                claude2: {code: 'OK', data: {sessionRemainingPct: 0, weeklyRemainingPct: 0}},
+                codex: {code: 'OK', data: {sessionRemainingPct: 0, weeklyRemainingPct: 0}},
+            },
+        }, {now: NOW, panelLabelMode: 'min-available', secondClaudeKey: 'claude2'});
+
+        expect(view.panelLabel).toBe('0%');
+    });
+
+    test('panelLabelMode min-available treats a provider as exhausted when either window hits 0, not only both', () => {
+        const view = buildUsageViewModel({
+            providers: {
+                claude: {code: 'OK', data: {sessionRemainingPct: 100, weeklyRemainingPct: 0}},
+                codex: {code: 'OK', data: {sessionRemainingPct: 50, weeklyRemainingPct: 60}},
+            },
+        }, {now: NOW, panelLabelMode: 'min-available'});
+
+        expect(view.panelLabel).toBe('50%');
+    });
+
+    test('panelLabelMode min-available shows the placeholder when no provider has any data', () => {
+        const view = buildUsageViewModel({
+            providers: {
+                claude: {code: 'AUTH_EXPIRED', data: null},
+                codex: {code: 'NETWORK_ERROR', data: null},
+            },
+        }, {now: NOW, panelLabelMode: 'min-available'});
+
+        expect(view.panelLabel).toBe('--');
+    });
 });
 
 describe('buildUsageViewModel multi-account Claude cards', () => {

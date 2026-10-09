@@ -1,6 +1,6 @@
 const VERSION = 'brainusage 1.0.1';
 
-export const PANEL_LABEL_MODES = ['min', 'claude-accounts', 'claude-session', 'claude-weekly', 'codex-session', 'codex-weekly'];
+export const PANEL_LABEL_MODES = ['min', 'min-available', 'claude-accounts', 'claude-session', 'claude-weekly', 'codex-session', 'codex-weekly'];
 
 function getPanelLabelValue(summary, mode) {
     if (mode === 'min' || !mode)
@@ -46,6 +46,30 @@ function accountBindingRemainingPct(data) {
         return undefined;
 
     return Math.min(...candidates);
+}
+
+// The lowest binding-remaining percentage among providers that are not
+// exhausted (binding remaining <= 0). Exhausted providers are skipped so one
+// dead account doesn't pin the label at 0% while others still have headroom;
+// if every provider with data is exhausted, shows 0% rather than '--' so the
+// panel still communicates "nothing left" instead of looking like no data.
+function buildMinAvailablePanelValue(summary) {
+    const providers = summary?.providers;
+    if (!providers)
+        return undefined;
+
+    const bindingValues = Object.values(providers)
+        .map((provider) => accountBindingRemainingPct(provider?.data))
+        .filter(Number.isFinite);
+
+    if (bindingValues.length === 0)
+        return undefined;
+
+    const available = bindingValues.filter((pct) => pct > 0);
+    if (available.length === 0)
+        return 0;
+
+    return Math.min(...available);
 }
 
 function buildClaudeAccountsPanelLabel(summary, claudeLabel, secondClaudeKey, secondClaudeLabel) {
@@ -232,7 +256,9 @@ export function buildUsageViewModel(summary, deps = {}) {
 
     const panelLabel = panelLabelMode === 'claude-accounts'
         ? buildClaudeAccountsPanelLabel(summary, claudeLabel, secondClaudeKey, secondClaudeLabel)
-        : formatPercent(getPanelLabelValue(summary, panelLabelMode));
+        : panelLabelMode === 'min-available'
+            ? formatPercent(buildMinAvailablePanelValue(summary))
+            : formatPercent(getPanelLabelValue(summary, panelLabelMode));
 
     return {
         panelLabel,

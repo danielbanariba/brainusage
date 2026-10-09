@@ -21,6 +21,7 @@ Kirigami.FormLayout {
         valueRole: "value"
         model: [
             {value: "min", text: i18n("All (minimum)")},
+            {value: "min-available", text: i18n("Lowest still available")},
             {value: "claude-accounts", text: i18n("Claude accounts")},
             {value: "claude-session", text: i18n("Claude Session")},
             {value: "claude-weekly", text: i18n("Claude Weekly")},
