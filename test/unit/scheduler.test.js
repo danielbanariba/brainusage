@@ -1,6 +1,7 @@
 import {describe, expect, test} from 'bun:test';
 
 import {createBackoffManager} from '../../shared/core/backoff.js';
+import {createRateGate} from '../../shared/core/rate-gate.js';
 import {createScheduler, DEFAULT_POLL_INTERVAL_MS} from '../../shared/core/scheduler.js';
 
 async function flushMicrotasks() {
@@ -282,6 +283,134 @@ describe('scheduler', () => {
         await scheduler.refresh();
         const summary = scheduler.getSummary();
         expect(summary.keepalive).toBeUndefined();
+    });
+
+    test('never runs two rate-gated providers concurrently, even in the same refresh', async () => {
+        const first = deferred();
+        let active = 0;
+        let peakActive = 0;
+        const calls = {claude: 0, claude2: 0};
+        const gate = createRateGate({nowMs: () => 0});
+
+        const scheduler = createScheduler({
+            rateGates: {claude: gate, claude2: gate},
+            providers: {
+                claude: {
+                    async getUsage() {
+                        calls.claude += 1;
+                        active += 1;
+                        peakActive = Math.max(peakActive, active);
+                        await first.promise;
+                        active -= 1;
+                        return {ok: true, data: {sessionRemainingPct: 90, weeklyRemainingPct: 80}};
+                    },
+                },
+                claude2: {
+                    async getUsage() {
+                        calls.claude2 += 1;
+                        active += 1;
+                        peakActive = Math.max(peakActive, active);
+                        active -= 1;
+                        return {ok: true, data: {sessionRemainingPct: 50, weeklyRemainingPct: 40}};
+                    },
+                },
+            },
+        });
+
+        const refreshing = scheduler.refresh();
+        await flushMicrotasks();
+
+        // claude is still awaiting `first`; claude2 must not have run yet.
+        expect(calls.claude2).toBe(0);
+
+        first.resolve();
+        await refreshing;
+
+        expect(calls.claude).toBe(1);
+        expect(calls.claude2).toBe(1);
+        expect(peakActive).toBe(1);
+    });
+
+    test('a 429 on one rate-gated account blocks both until the shared gate reopens', async () => {
+        let nowMs = 0;
+        const gate = createRateGate({nowMs: () => nowMs});
+        const calls = {claude: 0, claude2: 0};
+
+        const scheduler = createScheduler({
+            nowMs: () => nowMs,
+            rateGates: {claude: gate, claude2: gate},
+            providers: {
+                claude: {
+                    async getUsage() {
+                        calls.claude += 1;
+                        if (calls.claude === 1) {
+                            return {
+                                ok: false,
+                                error: {code: 'rate_limited', message: 'slow down', retryAfterMs: 5_000},
+                            };
+                        }
+                        return {ok: true, data: {sessionRemainingPct: 90, weeklyRemainingPct: 80}};
+                    },
+                },
+                claude2: {
+                    async getUsage() {
+                        calls.claude2 += 1;
+                        return {ok: true, data: {sessionRemainingPct: 50, weeklyRemainingPct: 40}};
+                    },
+                },
+            },
+        });
+
+        await scheduler.refresh();
+        expect(calls.claude).toBe(1);
+        expect(calls.claude2).toBe(1);
+
+        // Gate is now closed for 5s from claude's 429. A refresh before it
+        // reopens must not call either account again.
+        nowMs = 4_999;
+        await scheduler.refresh();
+        expect(calls.claude).toBe(1);
+        expect(calls.claude2).toBe(1);
+
+        nowMs = 5_000;
+        await scheduler.refresh();
+        expect(calls.claude).toBe(2);
+        expect(calls.claude2).toBe(2);
+    });
+
+    test('a rate-gated Claude 429 does not block an un-gated Codex provider', async () => {
+        let nowMs = 0;
+        const gate = createRateGate({nowMs: () => nowMs});
+        let codexCalls = 0;
+
+        const scheduler = createScheduler({
+            nowMs: () => nowMs,
+            rateGates: {claude: gate},
+            providers: {
+                claude: {
+                    async getUsage() {
+                        return {
+                            ok: false,
+                            error: {code: 'rate_limited', message: 'slow down', retryAfterMs: 60_000},
+                        };
+                    },
+                },
+                codex: {
+                    async getUsage() {
+                        codexCalls += 1;
+                        return {ok: true, data: {sessionRemainingPct: 70, weeklyRemainingPct: 60}};
+                    },
+                },
+            },
+        });
+
+        await scheduler.refresh();
+        expect(codexCalls).toBe(1);
+
+        // claude's gate is closed for 60s; codex has no gate and must still
+        // be called on the very next refresh.
+        await scheduler.refresh();
+        expect(codexCalls).toBe(2);
     });
 
     test('a throwing keepalive controller does not break the poll loop', async () => {

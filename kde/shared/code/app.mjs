@@ -14,6 +14,9 @@ import {
     DEFAULT_POLL_INTERVAL_MS,
     PANEL_LABEL_MODES,
 } from '../../../shared/index.mjs';
+// Imported directly (not through the index barrel above) to keep this
+// addition scoped to exactly the files this change needs.
+import {createRateGate} from '../../../shared/core/rate-gate.js';
 
 // No-op timer functions. The plasmoid drives polling from a QML Timer calling
 // refresh(); we never call scheduler.start(). These stubs are passed so the
@@ -84,7 +87,7 @@ export function createApp(deps) {
     ];
 
     // Registering the second provider under its own key is what gives it its
-    // own independent poll/backoff/state in the provider-count-agnostic
+    // own independent poll/state in the provider-count-agnostic
     // scheduler/aggregate/state core: a missing or unreadable second
     // credentials file fails only this provider's getUsage(), never the
     // others.
@@ -97,6 +100,16 @@ export function createApp(deps) {
         });
         notifierProviders.push({key: SECOND_CLAUDE_KEY, label: secondClaudeLabel});
     }
+
+    // All Claude accounts share api.anthropic.com's own per-client edge rate
+    // limit, so they share one gate: never two Claude requests (usage or
+    // refresh, across accounts) in flight at once, and one account's 429
+    // closes the gate for the other too, honoring its Retry-After. Applied
+    // even with a single account, so Retry-After is honored there as well.
+    const claudeRateGate = createRateGate();
+    const rateGates = {claude: claudeRateGate};
+    if (secondClaudeCredentialsPath)
+        rateGates[SECOND_CLAUDE_KEY] = claudeRateGate;
 
     const notifier = createThresholdNotifier({notifyFn: notify, providers: notifierProviders});
     const keepalive = createKeepalive({
@@ -114,6 +127,7 @@ export function createApp(deps) {
         setIntervalFn: noopSetInterval,
         clearIntervalFn: noopClearInterval,
         keepalive: keepalive,
+        rateGates: rateGates,
         onUpdate: function (summary) {
             lastSummary = summary;
             notifier.evaluate(summary);

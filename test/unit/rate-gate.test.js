@@ -76,14 +76,27 @@ describe('rate gate', () => {
         expect(gate.isOpen()).toBe(true);
     });
 
-    test('reopens immediately after a successful result', () => {
+    test('a success resets the escalation counter but does not cut a pending cooldown short', () => {
         let now = 0;
         const gate = createRateGate({nowMs: () => now, initialDelayMs: 100, maxDelayMs: 1000});
 
         gate.recordResult({ok: false, error: {code: 'rate_limited'}});
         expect(gate.isOpen()).toBe(false);
 
+        // A sibling's success while the gate is still closed (e.g. the other
+        // Claude account's call lands moments later) must not reopen it early.
         gate.recordResult({ok: true, data: {}});
+        expect(gate.isOpen()).toBe(false);
+
+        now = 100;
+        expect(gate.isOpen()).toBe(true);
+
+        // The success reset the escalation counter, so the next header-less
+        // 429 closes for the base delay again, not a doubled one.
+        gate.recordResult({ok: false, error: {code: 'rate_limited'}});
+        now = 199;
+        expect(gate.isOpen()).toBe(false);
+        now = 200;
         expect(gate.isOpen()).toBe(true);
     });
 

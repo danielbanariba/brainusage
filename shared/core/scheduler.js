@@ -47,6 +47,13 @@ export function createScheduler(options = {}) {
     const clearIntervalFn = options.clearIntervalFn ?? globalThis.clearInterval;
     const backoffManager = options.backoffManager ?? createBackoffManager();
     const keepalive = options.keepalive ?? null;
+    // Optional {providerName: gate} map. A provider name present here is
+    // "rate-gated": it shares that gate's mutex (never two gated providers'
+    // getUsage() in flight at once, across names) and its Retry-After-aware
+    // cooldown, instead of this scheduler's own per-provider backoffManager.
+    // Absent by default, so any caller that doesn't pass it (GNOME, Codex)
+    // behaves exactly as before.
+    const rateGates = options.rateGates ?? {};
     const providerStates = new Map();
 
     for (const {name} of providers)
@@ -88,10 +95,12 @@ export function createScheduler(options = {}) {
             state.queue = Promise.resolve();
         }
 
+        const gate = rateGates[name] ?? null;
+
         // Automatic polling still respects the backoff window. A forced refresh
         // comes from an explicit user action, which is a stronger signal than
         // the failure history the backoff is protecting against.
-        if (!force && backoffManager.shouldBackoff(name))
+        if (!force && (gate ? !gate.isOpen() : backoffManager.shouldBackoff(name)))
             return Promise.resolve();
 
         const requestId = state.latestRequestedRequestId + 1;
@@ -105,13 +114,20 @@ export function createScheduler(options = {}) {
             let result;
 
             try {
-                result = await provider.getUsage();
+                // A gated provider's actual call is queued behind every other
+                // provider sharing the same gate, so two accounts hitting the
+                // same rate-limited upstream are never in flight together.
+                result = gate ? await gate.run(() => provider.getUsage()) : await provider.getUsage();
             } catch {
                 result = createNetworkFailureResult();
             }
 
             applyProviderResult(state, result, requestId, nowIso());
-            backoffManager.recordResult(name, result);
+
+            if (gate)
+                gate.recordResult(result);
+            else
+                backoffManager.recordResult(name, result);
 
             // Only the newest request owns the flag: an abandoned one that
             // finally settles must not clear it out from under its successor.

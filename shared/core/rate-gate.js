@@ -31,8 +31,12 @@ export function createRateGate(options = {}) {
 
     function recordResult(result) {
         if (result?.ok) {
+            // Reset the escalation counter so the next header-less 429 starts
+            // from the base delay again. Deliberately does NOT clear openAtMs:
+            // with two callers sharing one gate, a sibling's success must not
+            // cut short a cooldown another caller's 429 just established —
+            // isOpen() reopens on its own once real time passes it.
             attempt = 0;
-            openAtMs = 0;
             return;
         }
 
