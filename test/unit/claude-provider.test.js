@@ -12,6 +12,18 @@ function createJsonResponse(status, payload) {
     };
 }
 
+function createJsonResponseWithHeaders(status, payload, headers) {
+    const map = new Map(Object.entries(headers ?? {}).map(([k, v]) => [k.toLowerCase(), v]));
+    return {
+        ...createJsonResponse(status, payload),
+        headers: {
+            get(name) {
+                return map.get(String(name).toLowerCase()) ?? null;
+            },
+        },
+    };
+}
+
 describe('Claude provider', () => {
     test('returns missing_creds when credentials file is absent', async () => {
         const provider = createClaudeProvider({
@@ -206,6 +218,91 @@ describe('Claude provider', () => {
 
         expect(requestedPath).toBe('/home/user/.claude-work/.credentials.json');
         expect(result.ok).toBe(true);
+    });
+
+    test('parses a numeric Retry-After header (seconds) on a 429 usage response', async () => {
+        const provider = createClaudeProvider({
+            readTextFile: async () => JSON.stringify({
+                claudeAiOauth: {access_token: 'token', refresh_token: 'refresh-token'},
+            }),
+            fetch: async (url) => {
+                if (url === claudeProviderConfig.USAGE_ENDPOINT)
+                    return createJsonResponseWithHeaders(429, {}, {'retry-after': '5'});
+
+                throw new Error(`Unexpected URL: ${url}`);
+            },
+        });
+
+        const result = await provider.getUsage();
+
+        expect(result.ok).toBe(false);
+        expect(result.error.code).toBe('rate_limited');
+        expect(result.error.retryAfterMs).toBe(5_000);
+    });
+
+    test('parses an HTTP-date Retry-After header using the injected nowMs', async () => {
+        const nowMs = Date.parse('2026-02-09T10:00:00.000Z');
+        const provider = createClaudeProvider({
+            nowMs: () => nowMs,
+            readTextFile: async () => JSON.stringify({
+                claudeAiOauth: {access_token: 'token', refresh_token: 'refresh-token'},
+            }),
+            fetch: async (url) => {
+                if (url === claudeProviderConfig.USAGE_ENDPOINT) {
+                    return createJsonResponseWithHeaders(429, {}, {
+                        'Retry-After': 'Mon, 09 Feb 2026 10:00:10 GMT',
+                    });
+                }
+
+                throw new Error(`Unexpected URL: ${url}`);
+            },
+        });
+
+        const result = await provider.getUsage();
+
+        expect(result.error.retryAfterMs).toBe(10_000);
+    });
+
+    test('omits retryAfterMs when a 429 response has no Retry-After header', async () => {
+        const provider = createClaudeProvider({
+            readTextFile: async () => JSON.stringify({
+                claudeAiOauth: {access_token: 'token', refresh_token: 'refresh-token'},
+            }),
+            fetch: async (url) => {
+                if (url === claudeProviderConfig.USAGE_ENDPOINT)
+                    return createJsonResponse(429, {});
+
+                throw new Error(`Unexpected URL: ${url}`);
+            },
+        });
+
+        const result = await provider.getUsage();
+
+        expect(result.error.code).toBe('rate_limited');
+        expect(result.error.retryAfterMs).toBeUndefined();
+    });
+
+    test('parses Retry-After on a 429 from the refresh endpoint too', async () => {
+        const provider = createClaudeProvider({
+            readTextFile: async () => JSON.stringify({
+                claudeAiOauth: {
+                    access_token: 'expired',
+                    refresh_token: 'refresh-token',
+                    expires_at: new Date(Date.now() - 60_000).toISOString(),
+                },
+            }),
+            fetch: async (url) => {
+                if (url === claudeProviderConfig.REFRESH_ENDPOINT)
+                    return createJsonResponseWithHeaders(429, {}, {'retry-after': '12'});
+
+                throw new Error(`Unexpected URL: ${url}`);
+            },
+        });
+
+        const result = await provider.getUsage();
+
+        expect(result.error.code).toBe('rate_limited');
+        expect(result.error.retryAfterMs).toBe(12_000);
     });
 
     test('returns network_error when fetch throws', async () => {

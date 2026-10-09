@@ -60,7 +60,7 @@ function ok(data) {
     return {ok: true, data};
 }
 
-function fail(code, message, data = null) {
+function fail(code, message, data = null, retryAfterMs = null) {
     const result = {
         ok: false,
         error: {
@@ -72,7 +72,40 @@ function fail(code, message, data = null) {
     if (data)
         result.data = data;
 
+    if (Number.isFinite(retryAfterMs))
+        result.error.retryAfterMs = retryAfterMs;
+
     return result;
+}
+
+// Parses the standard Retry-After header (RFC 9110): either an integer
+// number of seconds, or an HTTP-date. Returns null when absent, malformed,
+// or when the response object doesn't expose headers at all (true today on
+// both the KDE XHR runtime and the GNOME Soup runtime; this degrades to the
+// caller's fallback backoff in that case, never throws).
+function parseRetryAfterMs(response, nowMsFn) {
+    const headers = response?.headers;
+    if (!headers || typeof headers.get !== 'function')
+        return null;
+
+    const raw = headers.get('retry-after');
+    if (raw === null || raw === undefined)
+        return null;
+
+    const trimmed = String(raw).trim();
+    if (/^\d+$/.test(trimmed))
+        return Math.max(0, Number(trimmed) * 1000);
+
+    const parsedMs = Date.parse(trimmed);
+    if (Number.isNaN(parsedMs))
+        return null;
+
+    return Math.max(0, parsedMs - nowMsFn());
+}
+
+function failFromResponse(response, code, message, nowMsFn) {
+    const retryAfterMs = code === 'rate_limited' ? parseRetryAfterMs(response, nowMsFn) : null;
+    return fail(code, message, null, retryAfterMs);
 }
 
 function mapHttpStatusToErrorCode(status) {
@@ -99,7 +132,7 @@ async function parseUsageResponse(response) {
     }
 }
 
-async function fetchUsage(fetchImpl, accessToken) {
+async function fetchUsage(fetchImpl, accessToken, nowMsFn) {
     const response = await fetchImpl(USAGE_ENDPOINT, {
         method: 'GET',
         headers: {
@@ -108,8 +141,14 @@ async function fetchUsage(fetchImpl, accessToken) {
         },
     });
 
-    if (!response.ok)
-        return fail(mapHttpStatusToErrorCode(response.status), `Usage request failed with status ${response.status}`);
+    if (!response.ok) {
+        return failFromResponse(
+            response,
+            mapHttpStatusToErrorCode(response.status),
+            `Usage request failed with status ${response.status}`,
+            nowMsFn,
+        );
+    }
 
     const json = await parseUsageResponse(response);
     if (!json)
@@ -118,7 +157,7 @@ async function fetchUsage(fetchImpl, accessToken) {
     return ok(json);
 }
 
-async function refreshAccessToken(fetchImpl, refreshToken) {
+async function refreshAccessToken(fetchImpl, refreshToken, nowMsFn) {
     if (!refreshToken)
         return fail('auth_expired', 'OAuth refresh token is missing');
 
@@ -136,8 +175,14 @@ async function refreshAccessToken(fetchImpl, refreshToken) {
         body,
     });
 
-    if (!response.ok)
-        return fail(mapHttpStatusToErrorCode(response.status), `Refresh request failed with status ${response.status}`);
+    if (!response.ok) {
+        return failFromResponse(
+            response,
+            mapHttpStatusToErrorCode(response.status),
+            `Refresh request failed with status ${response.status}`,
+            nowMsFn,
+        );
+    }
 
     let payload;
     try {
@@ -161,6 +206,7 @@ export function createClaudeProvider(options = {}) {
     const readTextFile = options.readTextFile ?? defaultReadTextFile;
     const homeDir = options.homeDir ?? globalThis.process?.env?.HOME ?? null;
     const credentialsPath = resolveCredentialsPath(homeDir, options.credentialsPath);
+    const nowMsFn = options.nowMs ?? (() => Date.now());
 
     return {
         async getUsage() {
@@ -193,20 +239,20 @@ export function createClaudeProvider(options = {}) {
 
             try {
                 if (!accessToken || isTokenExpired(oauthCredentials)) {
-                    const refreshed = await refreshAccessToken(fetchImpl, refreshToken);
+                    const refreshed = await refreshAccessToken(fetchImpl, refreshToken, nowMsFn);
                     if (!refreshed.ok)
                         return refreshed;
 
                     accessToken = refreshed.data.accessToken;
                 }
 
-                let usageResponse = await fetchUsage(fetchImpl, accessToken);
+                let usageResponse = await fetchUsage(fetchImpl, accessToken, nowMsFn);
                 if (!usageResponse.ok && usageResponse.error.code === 'auth_expired') {
-                    const refreshed = await refreshAccessToken(fetchImpl, refreshToken);
+                    const refreshed = await refreshAccessToken(fetchImpl, refreshToken, nowMsFn);
                     if (!refreshed.ok)
                         return refreshed;
 
-                    usageResponse = await fetchUsage(fetchImpl, refreshed.data.accessToken);
+                    usageResponse = await fetchUsage(fetchImpl, refreshed.data.accessToken, nowMsFn);
                 }
 
                 if (!usageResponse.ok)
