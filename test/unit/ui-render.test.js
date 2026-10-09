@@ -209,6 +209,61 @@ describe('buildUsageViewModel', () => {
         }, {now: NOW, panelLabelMode: 'unknown-mode'});
         expect(view.panelLabel).toBe('42%');
     });
+
+    test('panelLabelMode claude-accounts shows the primary account alone when no second account is configured', () => {
+        const view = buildUsageViewModel({
+            providers: {
+                claude: {code: 'OK', data: {sessionRemainingPct: 80, weeklyRemainingPct: 60}},
+            },
+        }, {now: NOW, panelLabelMode: 'claude-accounts', claudeLabel: 'Claude Work'});
+
+        expect(view.panelLabel).toBe('W 60%');
+    });
+
+    test('panelLabelMode claude-accounts joins both accounts with their own binding minimum', () => {
+        const view = buildUsageViewModel({
+            providers: {
+                claude: {code: 'OK', data: {sessionRemainingPct: 80, weeklyRemainingPct: 60}},
+                claude2: {code: 'OK', data: {sessionRemainingPct: 50, weeklyRemainingPct: 45}},
+            },
+        }, {
+            now: NOW,
+            panelLabelMode: 'claude-accounts',
+            claudeLabel: 'Claude Work',
+            secondClaudeKey: 'claude2',
+            secondClaudeLabel: 'Claude Personal',
+        });
+
+        expect(view.panelLabel).toBe('W 60% · P 45%');
+    });
+
+    test('panelLabelMode claude-accounts falls back to numbered prefixes when a label is just "Claude"/"Claude 2"', () => {
+        const view = buildUsageViewModel({
+            providers: {
+                claude: {code: 'OK', data: {sessionRemainingPct: 80, weeklyRemainingPct: 60}},
+                claude2: {code: 'OK', data: {sessionRemainingPct: 50, weeklyRemainingPct: 45}},
+            },
+        }, {now: NOW, panelLabelMode: 'claude-accounts', secondClaudeKey: 'claude2'});
+
+        expect(view.panelLabel).toBe('1 60% · 2 45%');
+    });
+
+    test('panelLabelMode claude-accounts shows -- for a missing second account, same placeholder as formatPercent', () => {
+        const view = buildUsageViewModel({
+            providers: {
+                claude: {code: 'OK', data: {sessionRemainingPct: 80, weeklyRemainingPct: 60}},
+                claude2: {code: 'AUTH_EXPIRED', data: null},
+            },
+        }, {
+            now: NOW,
+            panelLabelMode: 'claude-accounts',
+            claudeLabel: 'Claude Work',
+            secondClaudeKey: 'claude2',
+            secondClaudeLabel: 'Claude Personal',
+        });
+
+        expect(view.panelLabel).toBe('W 60% · P --');
+    });
 });
 
 describe('buildUsageViewModel multi-account Claude cards', () => {

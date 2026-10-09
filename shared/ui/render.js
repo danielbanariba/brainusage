@@ -1,6 +1,6 @@
 const VERSION = 'brainusage 1.0.1';
 
-export const PANEL_LABEL_MODES = ['min', 'claude-session', 'claude-weekly', 'codex-session', 'codex-weekly'];
+export const PANEL_LABEL_MODES = ['min', 'claude-accounts', 'claude-session', 'claude-weekly', 'codex-session', 'codex-weekly'];
 
 function getPanelLabelValue(summary, mode) {
     if (mode === 'min' || !mode)
@@ -24,6 +24,41 @@ function formatPercent(value) {
         return '--';
 
     return `${Math.round(value)}%`;
+}
+
+// First letter (uppercase) of a Claude account label after stripping a
+// leading "Claude" word and whitespace, e.g. "Claude Work" -> "W". Falls back
+// to the given digit when nothing is left, e.g. a bare "Claude" label.
+function accountPanelPrefix(label, fallback) {
+    const stripped = (label ?? '').replace(/^claude\s*/i, '').trim();
+    if (stripped.length === 0)
+        return fallback;
+
+    return stripped[0].toUpperCase();
+}
+
+// An account's own binding limit for the panel: the smaller of its session
+// and weekly remaining percentages (whichever runs out first), not the
+// cross-provider minimum used by the 'min' mode.
+function accountBindingRemainingPct(data) {
+    const candidates = [data?.sessionRemainingPct, data?.weeklyRemainingPct].filter(Number.isFinite);
+    if (candidates.length === 0)
+        return undefined;
+
+    return Math.min(...candidates);
+}
+
+function buildClaudeAccountsPanelLabel(summary, claudeLabel, secondClaudeKey, secondClaudeLabel) {
+    const claude = summary?.providers?.claude ?? null;
+    const primaryText = `${accountPanelPrefix(claudeLabel, '1')} ${formatPercent(accountBindingRemainingPct(claude?.data))}`;
+
+    if (!secondClaudeKey)
+        return primaryText;
+
+    const secondClaude = summary?.providers?.[secondClaudeKey] ?? null;
+    const secondText = `${accountPanelPrefix(secondClaudeLabel, '2')} ${formatPercent(accountBindingRemainingPct(secondClaude?.data))}`;
+
+    return `${primaryText} · ${secondText}`;
 }
 
 export function getDotColor(pct) {
@@ -195,8 +230,12 @@ export function buildUsageViewModel(summary, deps = {}) {
         services.push(buildServiceViewModel(secondClaudeLabel, secondClaude?.data, secondClaude?.code, now));
     }
 
+    const panelLabel = panelLabelMode === 'claude-accounts'
+        ? buildClaudeAccountsPanelLabel(summary, claudeLabel, secondClaudeKey, secondClaudeLabel)
+        : formatPercent(getPanelLabelValue(summary, panelLabelMode));
+
     return {
-        panelLabel: formatPercent(getPanelLabelValue(summary, panelLabelMode)),
+        panelLabel,
         services,
         version,
         lastUpdate: formatNextUpdate(summary?.lastUpdatedAtIso, pollIntervalMs, now),
