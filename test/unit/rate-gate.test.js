@@ -109,4 +109,20 @@ describe('rate gate', () => {
         gate.recordResult({ok: false, error: {code: 'network_error'}});
         expect(gate.isOpen()).toBe(true);
     });
+
+    test('abandon() releases the queue so a new run() proceeds although the previous fn never settled', async () => {
+        const gate = createRateGate({nowMs: () => 0});
+        let secondRan = false;
+
+        void gate.run(() => new Promise(() => {})); // never settles; intentionally not awaited
+
+        gate.abandon();
+
+        await gate.run(async () => {
+            secondRan = true;
+            return {ok: true};
+        });
+
+        expect(secondRan).toBe(true);
+    });
 });

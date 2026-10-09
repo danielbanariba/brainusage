@@ -82,6 +82,8 @@ export function createScheduler(options = {}) {
         if (!state || !provider || typeof provider.getUsage !== 'function')
             return Promise.resolve();
 
+        const gate = rateGates[name] ?? null;
+
         // Abandon a request that has hung: the queue is a promise chain, so
         // one that never settles stalls every later refresh, forced ones
         // included. Dropping the chain loses the dangling request, not the
@@ -93,9 +95,15 @@ export function createScheduler(options = {}) {
             state.inFlight = false;
             state.inFlightSinceMs = null;
             state.queue = Promise.resolve();
-        }
 
-        const gate = rateGates[name] ?? null;
+            // A gated provider's call may still be wedged inside the shared
+            // gate's own queue (it chains onto whatever never-settling fn()
+            // holds it), which this provider's reset alone cannot reach.
+            // Releasing it here reuses this same stall threshold instead of
+            // adding a separate timeout.
+            if (gate)
+                gate.abandon();
+        }
 
         // Automatic polling still respects the backoff window. A forced refresh
         // comes from an explicit user action, which is a stronger signal than

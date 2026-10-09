@@ -413,6 +413,56 @@ describe('scheduler', () => {
         expect(codexCalls).toBe(2);
     });
 
+    test('a stalled gated request releases the shared gate for its replacement and its gated sibling', async () => {
+        let nowMs = 0;
+        const gate = createRateGate({nowMs: () => nowMs});
+        const calls = {claude: 0, claude2: 0};
+
+        const scheduler = createScheduler({
+            nowMs: () => nowMs,
+            stalledRequestMs: 1000,
+            rateGates: {claude: gate, claude2: gate},
+            providers: {
+                claude: {
+                    async getUsage() {
+                        calls.claude += 1;
+                        if (calls.claude === 1)
+                            return new Promise(() => {}); // never settles
+                        return {ok: true, data: {sessionRemainingPct: 90, weeklyRemainingPct: 80}};
+                    },
+                },
+                claude2: {
+                    async getUsage() {
+                        calls.claude2 += 1;
+                        return {ok: true, data: {sessionRemainingPct: 50, weeklyRemainingPct: 40}};
+                    },
+                },
+            },
+        });
+
+        // claude hangs forever; claude2 queues behind it on the shared gate
+        // and never even starts.
+        void scheduler.refresh();
+        await flushMicrotasks();
+        expect(calls.claude).toBe(1);
+        expect(calls.claude2).toBe(0);
+
+        // Past the stall threshold, each account's own inFlight timer has
+        // breached it (claude2 was blocked waiting on the gate, not running),
+        // so the replacement request for claude AND claude2's first real
+        // attempt must both go through instead of staying wedged forever.
+        // Raced against a real timeout: if the gate stays wedged, refresh()
+        // never settles, and this fails on the assertions below instead of
+        // hanging the whole suite.
+        nowMs = 1000;
+        await Promise.race([
+            scheduler.refresh(),
+            new Promise((resolve) => setTimeout(resolve, 200)),
+        ]);
+        expect(calls.claude).toBe(2);
+        expect(calls.claude2).toBe(1);
+    });
+
     test('a throwing keepalive controller does not break the poll loop', async () => {
         const scheduler = createScheduler({
             keepalive: {

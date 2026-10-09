@@ -66,10 +66,21 @@ export function createRateGate(options = {}) {
         return scheduled;
     }
 
+    // Forcibly advances the queue past whatever is currently pending,
+    // regardless of whether it has settled. A non-settling fn() otherwise
+    // wedges every future run() behind it forever (the queue pointer never
+    // resolves), so the caller (scheduler.js's own stall-threshold recovery)
+    // calls this once it has independently given up on the current holder.
+    // The abandoned fn(), if it ever does resolve, is simply ignored.
+    function abandon() {
+        queue = Promise.resolve();
+    }
+
     return {
         isOpen,
         getOpenAtMs: () => openAtMs,
         recordResult,
         run,
+        abandon,
     };
 }
